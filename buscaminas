@@ -1,0 +1,312 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <windows.h>
+
+#define FILAS 6
+#define COLUMNAS 6
+#define MINA -1 //Macro pa minas y le puse -1 pa las minas. -Lian
+
+// Para el tablero backend
+void limpiarPantalla();
+void setColor(int color);
+void inicializarTablero(int tablero[FILAS][COLUMNAS]);
+void colocarMina(int tablero[FILAS][COLUMNAS]);
+void calcularNumeros(int tablero[FILAS][COLUMNAS]);
+void imprimirTablero(int tablero[FILAS][COLUMNAS]);
+
+// Pa el tablero que ve el jugador
+void inicializarTableroJugador(char tablero_jugador[FILAS][COLUMNAS]);
+// Funcion para imprimir el tablero del jugador
+void imprimirTableroJugador(char tablero_jugador[FILAS][COLUMNAS]);
+// Funcion para la logica de destapar
+int descubrirCasilla(int f, int c, int sol[FILAS][COLUMNAS], char jug[FILAS][COLUMNAS], int *celdas_descubiertas);
+
+
+int main() {
+    srand(time(NULL));
+
+    int tablero_solucion[FILAS][COLUMNAS]; //tablero con la solucion
+
+    // Este es el tablero que ve el jugador
+    char tablero_jugador[FILAS][COLUMNAS];
+    int minas_totales = 3; // El numero de minas
+    int celdas_descubiertas = 0; // Contador para saber cuando ganar
+    int juego_terminado = 0; // 0 = jugando, 1 = gano, 2 = perdio
+    int fila_elegida, col_elegida;
+
+    limpiarPantalla();
+
+    // Preparar el tablero de la solucion
+    inicializarTablero(tablero_solucion); //inicia lo chido
+    colocarMina(tablero_solucion); //le puse funcion pa q sea mas facil poner minas. -Lian
+    colocarMina(tablero_solucion);
+    colocarMina(tablero_solucion);
+    calcularNumeros(tablero_solucion); //numeros alredor de las minitas
+
+    // Prepara el tablero del jugador
+    inicializarTableroJugador(tablero_jugador);
+
+    while (juego_terminado == 0) {
+        limpiarPantalla();
+        printf("\t    ---BUSCAMINAS---\n\n");
+        // Imprimir el tablero del JUGADOR
+        imprimirTableroJugador(tablero_jugador);
+
+        // Pedir coordenadas
+        printf("\nElige una casilla:\n");
+        printf("Fila (0 a %d): ", FILAS - 1);
+        scanf("%d", &fila_elegida);
+        printf("Columna (0 a %d): ", COLUMNAS - 1);
+        scanf("%d", &col_elegida);
+
+        // Validar coordenadas
+        if (fila_elegida < 0 || fila_elegida >= FILAS || col_elegida < 0 || col_elegida >= COLUMNAS) {
+            printf("Coordenadas no validas. Intenta de nuevo.");
+            continue; // Salta al inicio del bucle
+        }
+
+        // Procesar la jugada
+        juego_terminado = descubrirCasilla(fila_elegida, col_elegida, tablero_solucion, tablero_jugador, &celdas_descubiertas);
+
+        // Checar si gano
+        int celdas_totales = FILAS * COLUMNAS;
+        if (juego_terminado == 0 && celdas_descubiertas == (celdas_totales - minas_totales)) {
+            juego_terminado = 1; // Gano
+        }
+    }
+
+   // Final del game
+    limpiarPantalla();
+    printf("\t   se acabo\n\n");
+
+    // Imprimir el tablero de la solucin
+    imprimirTablero(tablero_solucion);
+
+    if (juego_terminado == 1) {
+        printf("\norale, ganaste\n");
+    } else { // juego_terminado == 2
+        printf("\nChinnn, pisaste una mina.\n");
+    }
+
+    setColor(7); //color normal pa cuando salgas
+    printf("\n");
+
+    return 0;
+}
+
+void limpiarPantalla() {
+    system("cls");
+}
+ //7 = Gris claro (el normal)
+ //8 = Gris oscuro (para el 0)
+ //9 = Azul (para el 1)
+ //10 = Verde (para el 2)
+ //14 = Amarillo (para el 3)
+ //13 = Magenta (para el 4)
+ //12 = Rojo (para la mina)
+
+void setColor(int color) {
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsole, color); //funcion exclusiva de la libreria de colores (la busque en internet) -Lian
+}
+//inicar con ceros
+void inicializarTablero(int tablero[FILAS][COLUMNAS]) {
+    for (int i=0;i<FILAS;i++) {
+        for (int j=0;j<COLUMNAS;j++) {
+            tablero[i][j] = 0;
+        }
+    }
+}
+
+// Iniciar el tablero del jugador con todo oculto
+void inicializarTableroJugador(char tablero_jugador[FILAS][COLUMNAS]) {
+    for (int i = 0; i < FILAS; i++) {
+        for (int j = 0; j < COLUMNAS; j++) {
+            tablero_jugador[i][j] = '?'; // ? significa oculto
+        }
+    }
+}
+
+void colocarMina(int tablero[FILAS][COLUMNAS]) {
+    int i, j;
+    do {
+        //Aqui le puse pa q salga una mina en cualquier lado por cada juego. -Lian
+        i = rand() % FILAS;
+        j = rand() % COLUMNAS;
+    } while (tablero[i][j] == MINA); // Si ya habia una mina, busca otra casilla
+
+    tablero[i][j] = MINA;
+}
+
+void calcularNumeros(int tablero[FILAS][COLUMNAS]) {
+    for (int i=0;i<FILAS;i++) {
+        for (int j=0;j<COLUMNAS;j++) {
+
+            // Si esta casilla es una mina
+            if (tablero[i][j] == MINA) {
+
+                // entonces se recorre sus 8 casillas
+                for (int ni = i - 1; ni <= i + 1; ni++) {
+                    for (int nj = j - 1; nj <= j + 1; nj++) {
+
+                        //Aqui le puse pa checar sus limites -Lian
+                        // 1- El vecino ni esta dentro del tablero?
+                        int ni_valido = (ni >= 0) && (ni < FILAS);
+                        // 2- El vecino nj esta dentro del tablero?
+                        int nj_valido = (nj >= 0) && (nj < COLUMNAS);
+                        // 3- La casilla vecina NO es una mina?
+                        int no_es_mina = (tablero[ni][nj] != MINA);
+
+                        //Si lo anteriro es valido se le suma 1
+                        if (ni_valido && nj_valido && no_es_mina) {
+                            tablero[ni][nj]++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+//Aqui esta el juego con sus colorcitos -Lian
+// Esta funcion ahora imprime el tablero solucion al final
+void imprimirTablero(int tablero[FILAS][COLUMNAS]) {
+    for (int i=0;i<FILAS;i++) {
+        for (int j=0;j<COLUMNAS;j++) {
+            int valor = tablero[i][j];
+
+            switch(valor) {
+                case MINA:
+                    setColor(12); //Rojo
+                    printf("*\t");
+                    break;
+                case 0:
+                    setColor(8); //Gris
+                    printf("0\t");
+                    break;
+                case 1:
+                    setColor(9); //Azul
+                    printf("1\t");
+                    break;
+                case 2:
+                    setColor(10); //Verde
+                    printf("2\t");
+                    break;
+                case 3:
+                    setColor(14); //Amarillo
+                    printf("3\t");
+                    break;
+                default: // 4 o mas
+                    setColor(13); //Magenta o morado
+                    printf("%d\t", valor);
+                    break;
+            }
+            // Resetea el color despues de imprimir cada numero
+            setColor(7);
+        }
+        printf("\n\n"); //Doble salto para que sea bonito como dice el mike. -Lian
+    }
+}
+
+// Imprimir el tablero que ve el jugador
+void imprimirTableroJugador(char tablero_jugador[FILAS][COLUMNAS]) {
+    // Imprimir indices de columnas
+    printf("\t");
+    for(int j=0; j<COLUMNAS; j++){
+        printf("%d\t", j);
+    }
+    printf("\n\n");
+
+    for (int i=0;i<FILAS;i++) {
+        printf("%d\t", i); // Imprimir indice de fila
+        for (int j=0;j<COLUMNAS;j++) {
+            char valor = tablero_jugador[i][j];
+
+            // Usar switch para los colores segun el char
+            switch(valor) {
+                case '*': // Mina descubierta (solo al perder)
+                    setColor(12); //Rojo
+                    printf("*\t");
+                    break;
+                case '0':
+                    setColor(8); //Gris
+                    printf("0\t");
+                    break;
+                case '1':
+                    setColor(9); //Azul
+                    printf("1\t");
+                    break;
+                case '2':
+                    setColor(10); //Verde
+                    printf("2\t");
+                    break;
+                case '3':
+                    setColor(14); //Amarillo
+                    printf("3\t");
+                    break;
+                case '?': // Casilla oculta
+                    setColor(7); // Gris claro (normal)
+                    printf("?\t");
+                    break;
+                // Se podria anadir 'F' para banderas
+                default: // Numeros 4+
+                    setColor(13); //Magenta o morado
+                    printf("%c\t", valor); // Imprimir como caracter
+                    break;
+            }
+            setColor(7); // Resetear color
+        }
+        printf("\n\n");
+    }
+}
+// Logica para descubrir una casilla
+// Devuelve: 0 (seguir), 2 (perder)
+int descubrirCasilla(int f, int c, int sol[FILAS][COLUMNAS], char jug[FILAS][COLUMNAS], int *celdas_descubiertas) {
+
+    // 1. Validar limites
+    int f_valido = (f >= 0) && (f < FILAS);
+    int c_valido = (c >= 0) && (c < COLUMNAS);
+    if (!f_valido || !c_valido) {
+        return 0; // Fuera de limites, no hacer nada
+    }
+
+    // 2. Checar si ya esta descubierta
+    if (jug[f][c] != '?') {
+        return 0; // Ya se ve, no hacer nada
+    }
+
+    // 3. Checar si es mina
+    if (sol[f][c] == MINA) {
+        jug[f][c] = '*'; // Mostrar la mina
+        return 2; // Perdiste
+    }
+
+    // 4. Si es un numero (mayor a 0)
+    if (sol[f][c] > 0) {
+        // Convertir el numero (int) a caracter (char)
+        // '0' en ASCII es 48. Si sol[f][c] es 1, 1 + 48 = 49 (ASCII de '1')
+        jug[f][c] = sol[f][c] + '0';
+        (*celdas_descubiertas)++; // Sumar 1 a las celdas descubiertas
+        return 0; // Seguir jugando
+    }
+
+    // 5. Si es un cero (0)
+    if (sol[f][c] == 0) {
+        jug[f][c] = '0'; // Mostrar el '0'
+        (*celdas_descubiertas)++; // Sumar 1 a las celdas
+
+        // Llamar a esta misma funcion para todos los vecinos
+        for (int ni = f - 1; ni <= f + 1; ni++) {
+            for (int nj = c - 1; nj <= c + 1; nj++) {
+                // La funcion se encargara de checar los limites
+                // y si ya esta descubierta en la siguiente llamada
+                descubrirCasilla(ni, nj, sol, jug, celdas_descubiertas);
+            }
+        }
+        return 0; // Seguir jugando
+    }
+
+    return 0; // Por si acaso
+}
